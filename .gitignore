@@ -1,0 +1,110 @@
+# Node dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+backend/dist/
+frontend/dist/
+frontend/.vite/
+.vite-cache/
+.next/
+.out/
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage
+coverage/
+*.lcov
+
+# IDE/editor settings
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.psess
+*.user
+*.orig
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+Ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# Optional local config overrides
+*.local.*
+
+# Debugging output
+*.dump
+
+# Temporary files
+*.tmp
+*.temp
+.tmp/
+.cache/
+
+# Yarn / PNPM
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.pnp.*
+
+# ESLint cache
+.eslintcache
+
+# Type coverage / analysis
+.type-coverage/
+
+# Parcel / Vite / Webpack caches
+.parcel-cache/
+webpack-cache/
+
+# Storybook (if added later)
+.storybook-out/
+
+# Test snapshots / Jest cache
+.jest-cache/
+.jest/*
+
+# Cypress
+cypress/videos/
+cypress/screenshots/
+
+# Playwright
+playwright-report/
+
+# Mongo / DB dumps
+*.dump*
+
+# Misc
+*.swp
+*.swapy
+
+# Keep public assets & source committed
+!/frontend/public/
+!/frontend/src/
