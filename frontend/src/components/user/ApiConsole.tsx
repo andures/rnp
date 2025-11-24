@@ -152,6 +152,20 @@ const ApiConsole: React.FC = () => {
       ],
     },
     {
+      id: "infComplementariaInscripcion",
+      name: "Qry_InfComplementariaInscripcion",
+      description:
+        "Retorna info complementaria: residencia, contactos y foto (si existe)",
+      endpoint: "/api/rnp/inf-complementaria-inscripcion",
+      method: "POST",
+      parameters: [
+        "numeroIdentidad",
+        "codigoInstitucion",
+        "codigoSeguridad",
+        "usuarioInstitucion",
+      ],
+    },
+    {
       id: "inscripcionNacimiento",
       name: "Qry_InscripcionNacimiento",
       description:
@@ -391,6 +405,28 @@ const ApiConsole: React.FC = () => {
                 esMock: response.data?.esMock || false,
                 motivoMock: response.data?.motivoMock,
               };
+            } else if (selectedEndpoint.id === "infComplementariaInscripcion") {
+              // Llamar a la API de información complementaria con credenciales del formulario
+              const response = (await rnpAPI.getInfComplementariaInscripcion({
+                numeroIdentidad,
+                codigoInstitucion: queryParams.codigoInstitucion || "",
+                codigoSeguridad: queryParams.codigoSeguridad || "",
+                usuarioInstitucion: queryParams.usuarioInstitucion || "",
+              })) as ExtendedApiResponse;
+
+              result = {
+                success: response.success,
+                data: response.data,
+                error: response.error,
+                message: response.message,
+                timestamp: new Date().toISOString(),
+                consulta: selectedEndpoint.name,
+                parametrosUsados: queryParams,
+                // Información adicional sobre el modo de operación
+                modoOperacion: response.data?.esMock ? "MOCK/DEMO" : "RNP_REAL",
+                esMock: response.data?.esMock || false,
+                motivoMock: response.data?.motivoMock,
+              };
             } else {
               // Para las otras APIs, mostrar mensaje de que están pendientes de implementación
               result = {
@@ -460,7 +496,8 @@ const ApiConsole: React.FC = () => {
         (selectedEndpoint.id === "certificadoNacimiento" ||
           selectedEndpoint.id === "arbolGenealogico" ||
           selectedEndpoint.id === "infCompletaInscripcion" ||
-          selectedEndpoint.id === "inscripcionNacimiento")
+          selectedEndpoint.id === "inscripcionNacimiento" ||
+          selectedEndpoint.id === "infComplementariaInscripcion")
       ) {
         setSelectedResult(newResult);
         setOpenResultDialog(true);
@@ -1754,6 +1791,237 @@ const ApiConsole: React.FC = () => {
     );
   };
 
+  const renderInfComplementariaInscripcion = (
+    data: Record<string, unknown>
+  ) => {
+    if (!data || typeof data !== "object") return null;
+
+    const compData: Record<string, unknown> =
+      (data as { data?: Record<string, unknown> }).data || data;
+    const numeroIdentidad = String(
+      (compData as Record<string, unknown>)?.numeroIdentidad || ""
+    );
+    const nombres = String(
+      (compData as Record<string, unknown>)?.nombres || ""
+    );
+    const primerApellido = String(
+      (compData as Record<string, unknown>)?.primerApellido || ""
+    );
+    const segundoApellido = String(
+      (compData as Record<string, unknown>)?.segundoApellido || ""
+    );
+    const nombreCompleto =
+      `${nombres} ${primerApellido} ${segundoApellido}`.trim();
+    const sexo = String((compData as Record<string, unknown>)?.sexo || "");
+    const fechaNacimiento = String(
+      (compData as Record<string, unknown>)?.fechaDeNacimiento || ""
+    );
+    const direccionResidencia = String(
+      (compData as Record<string, unknown>)?.direccionResidencia || ""
+    );
+    const descrDeptoResidencia = String(
+      (compData as Record<string, unknown>)?.descrDeptoResidencia || ""
+    );
+    const descrMunicResidencia = String(
+      (compData as Record<string, unknown>)?.descrMunicResidencia || ""
+    );
+    const barrioResidencia = String(
+      (compData as Record<string, unknown>)?.descrBarrioResidencia || ""
+    );
+    const numeroTelefono = String(
+      (compData as Record<string, unknown>)?.numeroTelefono || ""
+    );
+    const telefonoCelular = String(
+      (compData as Record<string, unknown>)?.telefonoCelular || ""
+    );
+    const correoElectronico = String(
+      (compData as Record<string, unknown>)?.correoElectronico || ""
+    );
+    const foto = String((compData as Record<string, unknown>)?.foto || "");
+
+    return (
+      <Box sx={{ space: 3 }}>
+        <Card
+          sx={{
+            mb: 3,
+            bgcolor: theme.palette.mode === "dark" ? "grey.800" : "grey.50",
+          }}
+        >
+          <CardContent>
+            <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+              <HeartIcon sx={{ mr: 1, color: "primary.main" }} />
+              <Typography variant="h6" sx={{ fontWeight: "bold" }}>
+                Información Complementaria de Inscripción
+              </Typography>
+            </Box>
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+                gap: 2,
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center" }}>
+                <FingerprintIcon
+                  sx={{ mr: 1, color: "text.secondary", fontSize: 20 }}
+                />
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Número de Identidad
+                  </Typography>
+                  <Typography variant="body1" sx={{ fontWeight: "medium" }}>
+                    {numeroIdentidad || "No disponible"}
+                  </Typography>
+                </Box>
+              </Box>
+              {fechaNacimiento && (
+                <Box sx={{ display: "flex", alignItems: "center" }}>
+                  <CalendarIcon
+                    sx={{ mr: 1, color: "text.secondary", fontSize: 20 }}
+                  />
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Fecha de Nacimiento
+                    </Typography>
+                    <Typography variant="body2">
+                      {new Date(fechaNacimiento).toLocaleDateString("es-HN")}
+                    </Typography>
+                  </Box>
+                </Box>
+              )}
+            </Box>
+          </CardContent>
+        </Card>
+
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="h6" sx={{ fontWeight: "bold", mb: 2 }}>
+              Persona
+            </Typography>
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+                gap: 2,
+              }}
+            >
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Nombre Completo
+                </Typography>
+                <Typography variant="body1" sx={{ fontWeight: "medium" }}>
+                  {nombreCompleto || "No disponible"}
+                </Typography>
+              </Box>
+              {sexo && (
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Sexo
+                  </Typography>
+                  <Typography variant="body1">
+                    {sexo === "M"
+                      ? "Masculino"
+                      : sexo === "F"
+                      ? "Femenino"
+                      : sexo}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          </CardContent>
+        </Card>
+
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="h6" sx={{ fontWeight: "bold", mb: 2 }}>
+              Residencia y Contacto
+            </Typography>
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+                gap: 2,
+              }}
+            >
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Dirección
+                </Typography>
+                <Typography variant="body1">
+                  {direccionResidencia || "No disponible"}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", mt: 1 }}
+                >
+                  {[
+                    descrDeptoResidencia,
+                    descrMunicResidencia,
+                    barrioResidencia,
+                  ]
+                    .filter(Boolean)
+                    .join(" • ")}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Teléfono
+                </Typography>
+                <Typography variant="body1">
+                  {numeroTelefono || "No disponible"}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", mt: 1 }}
+                >
+                  Celular
+                </Typography>
+                <Typography variant="body1">
+                  {telefonoCelular || "No disponible"}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", mt: 1 }}
+                >
+                  Correo
+                </Typography>
+                <Typography variant="body1">
+                  {correoElectronico || "No disponible"}
+                </Typography>
+              </Box>
+            </Box>
+          </CardContent>
+        </Card>
+
+        {foto && foto.length > 0 && (
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Typography variant="h6" sx={{ fontWeight: "bold", mb: 2 }}>
+                Fotografía
+              </Typography>
+              <Box sx={{ display: "flex", justifyContent: "flex-start" }}>
+                <img
+                  alt="Foto RNP"
+                  src={`data:image/jpeg;base64,${foto}`}
+                  style={{
+                    width: 180,
+                    height: 220,
+                    objectFit: "cover",
+                    borderRadius: 8,
+                    border: "1px solid #ccc",
+                  }}
+                />
+              </Box>
+            </CardContent>
+          </Card>
+        )}
+      </Box>
+    );
+  };
+
   const handleEndpointSelect = (endpoint: ApiEndpoint) => {
     setSelectedEndpoint(endpoint);
 
@@ -2178,6 +2446,9 @@ const ApiConsole: React.FC = () => {
             : selectedResult?.status === "success" &&
               selectedResult?.endpoint === "Qry_InfCompletaInscripcion"
             ? "📋 Información Completa de Inscripción Obtenida"
+            : selectedResult?.status === "success" &&
+              selectedResult?.endpoint === "Qry_InfComplementariaInscripcion"
+            ? "📌 Información Complementaria de Inscripción Obtenida"
             : "Resultado de Consulta"}
           <IconButton onClick={() => setOpenResultDialog(false)}>
             <CloseIcon />
@@ -2213,6 +2484,10 @@ const ApiConsole: React.FC = () => {
               ) : selectedResult.status === "success" &&
                 selectedResult.endpoint === "Qry_InscripcionNacimiento" ? (
                 renderInscripcionNacimiento(selectedResult.result)
+              ) : selectedResult.status === "success" &&
+                selectedResult.endpoint ===
+                  "Qry_InfComplementariaInscripcion" ? (
+                renderInfComplementariaInscripcion(selectedResult.result)
               ) : (
                 <Typography variant="body2" color="text.secondary">
                   ✅ Consulta ejecutada exitosamente

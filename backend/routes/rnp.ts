@@ -34,9 +34,9 @@ const rnpCredentialsValidators = [
   body("usuarioInstitucion")
     .trim()
     .isLength({ min: 1, max: 50 })
-    .withMessage("Usuario de institución es requerido")
-    .matches(/^[A-Za-z0-9_-]+$/)
-    .withMessage("Usuario de institución contiene caracteres no válidos"),
+    .withMessage("Usuario de institución es requerido"),
+  // Permitimos cualquier string (incluidos numéricos) para usuarios institucionales.
+  // Validaciones adicionales se dejarán al backend del RNP.
 
   handleValidationErrors,
 ];
@@ -58,14 +58,20 @@ router.post(
         codigoInstitucion,
         codigoSeguridad,
         usuarioInstitucion,
+        // Nuevo: controles de entorno y fallback
+        environment,
+        preferReal,
       } = req.body;
 
       console.log(
         `🔍 Solicitud de certificado de nacimiento para: ${numeroIdentidad}`
       );
       console.log(
-        `📋 Credenciales recibidas: ${codigoInstitucion}/${usuarioInstitucion}`
+        `📋 Credenciales recibidas: institucion=${codigoInstitucion}, usuario=${usuarioInstitucion}, seguridad=${String(
+          codigoSeguridad
+        ).replace(/.(?=.{4}$)/g, "*")}`
       );
+      // Nota: usuarioInstitucion puede ser numérico; se acepta tal cual.
 
       // Validar que se proporcionen todas las credenciales necesarias
       if (
@@ -122,9 +128,26 @@ router.post(
       );
       let rnpService;
       try {
-        // Usar las credenciales proporcionadas por el usuario
+        // Selección clara del entorno
+        const TEST_URL =
+          process.env.RNP_BASE_URL_TEST || "https://wstest.rnp.hn:1893";
+        const PROD_URL =
+          process.env.RNP_BASE_URL_PROD || "https://soapservices.rnp.hn";
+        let baseUrl = PROD_URL;
+        let chosenEnv: "prod" | "test" = "prod";
+        if (environment === "test") {
+          baseUrl = TEST_URL;
+          chosenEnv = "test";
+        } else if (environment === "prod") {
+          baseUrl = PROD_URL;
+          chosenEnv = "prod";
+        } else if (isUsingOfficialTestCredentials) {
+          baseUrl = TEST_URL;
+          chosenEnv = "test";
+        }
+        console.log(`📡 Base URL RNP usada: ${baseUrl} (env=${chosenEnv})`);
         rnpService = createRNPService({
-          baseUrl: process.env.RNP_BASE_URL || "https://wstest.rnp.hn:1893",
+          baseUrl,
           codigoInstitucion,
           codigoSeguridad,
           usuarioInstitucion,
@@ -172,11 +195,23 @@ router.post(
           `❌ Error obteniendo certificado para ${numeroIdentidad}: ${response.error}`
         );
 
-        // Si el error es CSI (credenciales inválidas), usar datos mock automáticamente
+        // Si el error es CSI (credenciales inválidas)
         if (response.error === "CSI") {
-          console.log(
-            "🔄 Credenciales RNP inválidas - cambiando a datos mock automáticamente"
-          );
+          // Si el cliente pidió resultados reales (preferReal=true) o son credenciales reales (no PRUEBAS),
+          // NO hacer fallback a mock. Devolver el error original.
+          if (preferReal === true || !isUsingOfficialTestCredentials) {
+            return res.status(401).json({
+              success: false,
+              error: "CSI",
+              message:
+                "Credenciales RNP no autorizadas o red no habilitada (CSI)",
+              detalles: {
+                endpoint: "qry_CertificadoNacimiento",
+                parametrosUsados: { numeroIdentidad },
+              },
+              timestamp: new Date().toISOString(),
+            });
+          }
 
           // Generar un PDF mock más realista (sin el prefijo data:)
           const mockPdfBase64 =
@@ -344,6 +379,99 @@ router.get("/test-connection", async (req, res) => {
 });
 
 /**
+ * POST /api/rnp/validar-credenciales
+ * Verifica si las credenciales dadas son aceptadas por el RNP (sin usar mocks).
+ * Realiza una llamada simple que falla con CSI si no están autorizadas.
+ */
+router.post("/validar-credenciales", async (req, res) => {
+  try {
+    const {
+      numeroIdentidad,
+      codigoInstitucion,
+      codigoSeguridad,
+      usuarioInstitucion,
+      environment,
+    } = req.body;
+
+    if (!codigoInstitucion || !codigoSeguridad || !usuarioInstitucion) {
+      return res.status(400).json({
+        success: false,
+        error: "MISSING_PARAMETERS",
+        message:
+          "Se requieren codigoInstitucion, codigoSeguridad, usuarioInstitucion",
+      });
+    }
+
+    console.log(
+      `🔐 Validación de credenciales: institucion=${codigoInstitucion}, usuario=${usuarioInstitucion}, seguridad=${String(
+        codigoSeguridad
+      ).replace(/.(?=.{4}$)/g, "*")}`
+    );
+
+    const isUsingOfficialTestCredentials =
+      codigoInstitucion === "PRUEBAS" &&
+      codigoSeguridad === "T3$T1NG" &&
+      usuarioInstitucion === "Usuario13";
+
+    const TEST_URL =
+      process.env.RNP_BASE_URL_TEST || "https://wstest.rnp.hn:1893";
+    const PROD_URL =
+      process.env.RNP_BASE_URL_PROD || "https://soapservices.rnp.hn";
+    let baseUrl = PROD_URL;
+    if (environment === "test" || isUsingOfficialTestCredentials)
+      baseUrl = TEST_URL;
+
+    const rnpService = createRNPService({
+      baseUrl,
+      codigoInstitucion,
+      codigoSeguridad,
+      usuarioInstitucion,
+    });
+
+    // Usar un número de identidad dummy válido en formato; objetivo es provocar auth.
+    const idParaProbar =
+      numeroIdentidad && /^\d{13}$/.test(numeroIdentidad)
+        ? numeroIdentidad
+        : "0801197206013";
+
+    const resp = await rnpService.getCertificadoNacimiento({
+      numeroIdentidad: idParaProbar,
+    });
+
+    if (resp.success) {
+      return res.json({
+        success: true,
+        message: "Credenciales aceptadas por el RNP",
+        baseUrl,
+        endpoint: "qry_CertificadoNacimiento",
+      });
+    }
+
+    if (resp.error === "CSI") {
+      return res.status(401).json({
+        success: false,
+        error: "CSI",
+        message: "Credenciales no autorizadas o red no habilitada en RNP (CSI)",
+        baseUrl,
+      });
+    }
+
+    return res.status(400).json({
+      success: false,
+      error: resp.error || "SERVICE_ERROR",
+      message: resp.message,
+      baseUrl,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      error: "INTERNAL_SERVER_ERROR",
+      message: error.message,
+    });
+  }
+});
+
+/**
  * POST /api/rnp/arbol-genealogico
  * Obtiene el árbol genealógico usando la API real del RNP
  * Acepta credenciales dinámicas del usuario
@@ -355,11 +483,15 @@ router.post("/arbol-genealogico", logActivity("QUERY"), async (req, res) => {
       codigoInstitucion,
       codigoSeguridad,
       usuarioInstitucion,
+      environment,
+      preferReal,
     } = req.body;
 
     console.log(`🌳 Solicitud de árbol genealógico para: ${numeroIdentidad}`);
     console.log(
-      `📋 Credenciales recibidas: ${codigoInstitucion}/${usuarioInstitucion}`
+      `📋 Credenciales recibidas: institucion=${codigoInstitucion}, usuario=${usuarioInstitucion}, seguridad=${String(
+        codigoSeguridad
+      ).replace(/.(?=.{4}$)/g, "*")}`
     );
 
     // Validar que se proporcionen todas las credenciales necesarias
@@ -384,7 +516,15 @@ router.post("/arbol-genealogico", logActivity("QUERY"), async (req, res) => {
       usuarioInstitucion === "Usuario13";
 
     // Crear servicio RNP con credenciales proporcionadas por el usuario
+    const TEST_URL =
+      process.env.RNP_BASE_URL_TEST || "https://wstest.rnp.hn:1893";
+    const PROD_URL =
+      process.env.RNP_BASE_URL_PROD || "https://soapservices.rnp.hn";
+    let baseUrl = PROD_URL;
+    if (environment === "test" || isUsingOfficialTestCredentials)
+      baseUrl = TEST_URL;
     const rnpService = createRNPService({
+      baseUrl,
       codigoInstitucion,
       codigoSeguridad,
       usuarioInstitucion,
@@ -412,10 +552,11 @@ router.post("/arbol-genealogico", logActivity("QUERY"), async (req, res) => {
       console.log(`❌ Error obteniendo árbol genealógico: ${response.error}`);
 
       // Si las credenciales no son válidas y no son las oficiales de prueba,
-      // devolver datos mock para demostración
+      // devolver datos mock para demostración, a menos que preferReal sea true
       if (
         response.error === "INVALID_CREDENTIALS" &&
-        !isUsingOfficialTestCredentials
+        !isUsingOfficialTestCredentials &&
+        preferReal !== true
       ) {
         console.log("🎭 Devolviendo datos mock para demostración");
 
@@ -518,13 +659,19 @@ router.post(
         codigoInstitucion,
         codigoSeguridad,
         usuarioInstitucion,
+        // Opcional: forzar entorno 'prod' o 'test'
+        environment,
+        // Opcional: no hacer fallback a mock en CSI y devolver el error real
+        preferReal,
       } = req.body;
 
       console.log(
         `📋 Solicitud de información completa de inscripción para: ${numeroIdentidad}`
       );
       console.log(
-        `📋 Credenciales recibidas: ${codigoInstitucion}/${usuarioInstitucion}`
+        `📋 Credenciales recibidas: institucion=${codigoInstitucion}, usuario=${usuarioInstitucion}, seguridad=${String(
+          codigoSeguridad
+        ).replace(/.(?=.{4}$)/g, "*")}`
       );
 
       // Validar que se proporcionen todas las credenciales necesarias
@@ -561,8 +708,26 @@ router.post(
       // Crear servicio RNP con credenciales proporcionadas por el usuario
       let rnpService;
       try {
+        // Selección clara del entorno
+        const TEST_URL =
+          process.env.RNP_BASE_URL_TEST || "https://wstest.rnp.hn:1893";
+        const PROD_URL =
+          process.env.RNP_BASE_URL_PROD || "https://soapservices.rnp.hn";
+        let baseUrl = PROD_URL;
+        let chosenEnv: "prod" | "test" = "prod";
+        if (environment === "test") {
+          baseUrl = TEST_URL;
+          chosenEnv = "test";
+        } else if (environment === "prod") {
+          baseUrl = PROD_URL;
+          chosenEnv = "prod";
+        } else if (isUsingOfficialTestCredentials) {
+          baseUrl = TEST_URL;
+          chosenEnv = "test";
+        }
+        console.log(`📡 Base URL RNP usada: ${baseUrl} (env=${chosenEnv})`);
         rnpService = createRNPService({
-          baseUrl: process.env.RNP_BASE_URL || "https://wstest.rnp.hn:1893",
+          baseUrl,
           codigoInstitucion,
           codigoSeguridad,
           usuarioInstitucion,
@@ -611,8 +776,24 @@ router.post(
           `❌ Error obteniendo información completa para ${numeroIdentidad}: ${response.error}`
         );
 
-        // Si el error es CSI (credenciales inválidas), usar datos mock automáticamente
+        // Si el error es CSI (credenciales inválidas)
         if (response.error === "CSI") {
+          // Si el cliente pidió resultados reales (preferReal=true) o son credenciales reales (no PRUEBAS),
+          // NO hacer fallback a mock. Devolver el error original.
+          if (preferReal === true || !isUsingOfficialTestCredentials) {
+            return res.status(401).json({
+              success: false,
+              error: "CSI",
+              message:
+                "Credenciales RNP no autorizadas o red no habilitada (CSI)",
+              detalles: {
+                endpoint: "Qry_InfCompletaInscripcion",
+                parametrosUsados: { numeroIdentidad },
+              },
+              timestamp: new Date().toISOString(),
+            });
+          }
+
           console.log(
             "🔄 Credenciales RNP inválidas - cambiando a datos mock automáticamente"
           );
@@ -775,12 +956,12 @@ router.post(
 );
 
 /**
- * POST /api/rnp/inscripcion-nacimiento
- * Obtiene la información de inscripción de nacimiento usando la API real del RNP
+ * POST /api/rnp/inf-complementaria-inscripcion
+ * Obtiene la información complementaria de inscripción (incluye residencia y foto) usando la API real del RNP
  * Acepta credenciales dinámicas del usuario
  */
 router.post(
-  "/inscripcion-nacimiento",
+  "/inf-complementaria-inscripcion",
   logActivity("QUERY"),
   async (req, res) => {
     try {
@@ -789,13 +970,19 @@ router.post(
         codigoInstitucion,
         codigoSeguridad,
         usuarioInstitucion,
+        // Opcional: si viene true, no hacer fallback a mock en CSI y devolver el error real
+        preferReal,
+        // Opcional: forzar entorno 'prod' o 'test'
+        environment,
       } = req.body;
 
       console.log(
-        `📋 Solicitud de información de inscripción de nacimiento para: ${numeroIdentidad}`
+        `📋 Solicitud de información complementaria de inscripción para: ${numeroIdentidad}`
       );
       console.log(
-        `📋 Credenciales recibidas: ${codigoInstitucion}/${usuarioInstitucion}`
+        `📋 Credenciales recibidas: institucion=${codigoInstitucion}, usuario=${usuarioInstitucion}, seguridad=${String(
+          codigoSeguridad
+        ).replace(/.(?=.{4}$)/g, "*")}`
       );
 
       // Validar que se proporcionen todas las credenciales necesarias
@@ -832,8 +1019,284 @@ router.post(
       // Crear servicio RNP con credenciales proporcionadas por el usuario
       let rnpService;
       try {
+        // Selección de entorno clara y explícita
+        const TEST_URL =
+          process.env.RNP_BASE_URL_TEST || "https://wstest.rnp.hn:1893";
+        const PROD_URL =
+          process.env.RNP_BASE_URL_PROD || "https://soapservices.rnp.hn";
+
+        let baseUrl = PROD_URL;
+        let chosenEnv: "prod" | "test" = "prod";
+
+        if (environment === "test") {
+          baseUrl = TEST_URL;
+          chosenEnv = "test";
+        } else if (environment === "prod") {
+          baseUrl = PROD_URL;
+          chosenEnv = "prod";
+        } else if (isUsingOfficialTestCredentials) {
+          baseUrl = TEST_URL;
+          chosenEnv = "test";
+        } else {
+          baseUrl = PROD_URL;
+          chosenEnv = "prod";
+        }
+
+        console.log(`🌐 Entorno RNP seleccionado: ${chosenEnv} (${baseUrl})`);
         rnpService = createRNPService({
-          baseUrl: process.env.RNP_BASE_URL || "https://wstest.rnp.hn:1893",
+          baseUrl,
+          codigoInstitucion,
+          codigoSeguridad,
+          usuarioInstitucion,
+        });
+        console.log("✅ Servicio RNP creado exitosamente");
+      } catch (serviceError: any) {
+        console.error("❌ Error creando servicio RNP:", serviceError.message);
+        return res.status(400).json({
+          success: false,
+          error: "RNP_CONFIG_ERROR",
+          message: `Error de configuración RNP: ${serviceError.message}`,
+        });
+      }
+
+      // Realizar consulta
+      console.log(
+        `🔄 Realizando consulta RNP... (${
+          isUsingOfficialTestCredentials
+            ? "Credenciales oficiales de prueba"
+            : "Credenciales personalizadas del usuario"
+        })`
+      );
+      const response = await rnpService.getInfComplementariaInscripcion({
+        numeroIdentidad,
+      });
+
+      if (response.success) {
+        console.log(
+          `✅ Información complementaria obtenida exitosamente para: ${numeroIdentidad}`
+        );
+        res.json({
+          success: true,
+          data: {
+            ...response.data!,
+            timestamp: new Date().toISOString(),
+            consulta: "Qry_InfComplementariaInscripcion",
+            parametrosUsados: { numeroIdentidad },
+            credencialesOficiales: isUsingOfficialTestCredentials,
+          },
+          message: response.message,
+        });
+      } else {
+        console.log(
+          `❌ Error obteniendo información complementaria para ${numeroIdentidad}: ${response.error}`
+        );
+
+        // Si las credenciales son inválidas (CSI), proveer datos mock como demo
+        if (response.error === "CSI") {
+          // Si el cliente pidió resultados reales (preferReal=true) o son credenciales reales,
+          // NO hacer fallback a mock. Devolver el error original para poder diagnosticar.
+          if (preferReal === true || !isUsingOfficialTestCredentials) {
+            return res.status(401).json({
+              success: false,
+              error: "CSI",
+              message:
+                "Credenciales RNP no autorizadas o no válidas para este servicio y/o desde esta red (CSI)",
+              detalles: {
+                credencialesOficiales: isUsingOfficialTestCredentials,
+                endpoint: "Qry_InfComplementariaInscripcion",
+                parametrosUsados: { numeroIdentidad },
+              },
+              errorRNPOriginal: {
+                codigo: response.error,
+                mensaje: response.message,
+              },
+              timestamp: new Date().toISOString(),
+            });
+          }
+
+          const mockData = {
+            numeroIdentidad,
+            numInscripcion: `INS-${numeroIdentidad}`,
+            nombres: "NOMBRE DEMO",
+            primerApellido: "APELLIDO",
+            segundoApellido: "DEMO",
+            sexo: "M",
+            fechaDeNacimiento: "1990-01-01T00:00:00",
+            estadoCivil: 1,
+            descrEstadoCivil: "Soltero(a)",
+            estadoVivencia: 1,
+            descrEstadoVivencia: "Vivo(a)",
+            fechaDeDefuncion: "",
+            paisResidencia: 1,
+            descrPaisResidencia: "Honduras",
+            deptoResidencia: 8,
+            descrDeptoResidencia: "Francisco Morazán",
+            municResidencia: 1,
+            descrMunicResidencia: "Distrito Central",
+            barrioResidencia: 0,
+            descrBarrioResidencia: "",
+            direccionResidencia: "COLONIA DEMO, CALLE PRINCIPAL",
+            ocupacionLaboral: 0,
+            descrOcupacionLaboral: "",
+            numeroTelefono: "2234-5678",
+            telefonoCelular: "9999-8888",
+            correoElectronico: "demo@correo.hn",
+            madre: {
+              numInscripcion: "0801197210027",
+              nombres: "MARIA",
+              primerApellido: "PEREZ",
+              segundoApellido: "LOPEZ",
+              sexo: "F",
+              fechaDeNacimiento: "1972-04-15T00:00:00",
+              estadoCivil: 2,
+              estadoVivencia: 1,
+              fechaDeDefuncion: "",
+            },
+            padre: {
+              numInscripcion: `PAD-${numeroIdentidad}`,
+              nombres: "JUAN",
+              primerApellido: "PEREZ",
+              segundoApellido: "HERNANDEZ",
+              sexo: "M",
+              fechaDeNacimiento: "1970-08-20T00:00:00",
+              estadoCivil: 2,
+              estadoVivencia: 1,
+              fechaDeDefuncion: "",
+            },
+            foto: "", // sin foto en modo demo
+          };
+
+          return res.json({
+            success: true,
+            data: {
+              ...mockData,
+              timestamp: new Date().toISOString(),
+              consulta: "Qry_InfComplementariaInscripcion",
+              parametrosUsados: { numeroIdentidad },
+              esMock: true,
+              motivoMock:
+                "Credenciales no válidas para la API real o red no autorizada; devolviendo datos demo para continuar la experiencia",
+              errorRNPOriginal: {
+                codigo: response.error,
+                mensaje: response.message,
+              },
+            },
+            message:
+              "Usando datos de prueba por credenciales no válidas o red no autorizada (CSI)",
+          });
+        }
+
+        // Para otros errores, devolver el error original
+        res.status(400).json({
+          success: false,
+          error: response.error,
+          message: response.message,
+          timestamp: new Date().toISOString(),
+          consulta: "Qry_InfComplementariaInscripcion",
+          parametrosUsados: { numeroIdentidad },
+        });
+      }
+    } catch (error: any) {
+      console.error(
+        "❌ Error en endpoint inf-complementaria-inscripcion:",
+        error
+      );
+      res.status(500).json({
+        success: false,
+        error: "INTERNAL_SERVER_ERROR",
+        message: "Error interno del servidor",
+        details:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/rnp/inscripcion-nacimiento
+ * Obtiene la información de inscripción de nacimiento usando la API real del RNP
+ * Acepta credenciales dinámicas del usuario
+ */
+router.post(
+  "/inscripcion-nacimiento",
+  logActivity("QUERY"),
+  async (req, res) => {
+    try {
+      const {
+        numeroIdentidad,
+        codigoInstitucion,
+        codigoSeguridad,
+        usuarioInstitucion,
+        environment,
+        preferReal,
+      } = req.body;
+
+      console.log(
+        `📋 Solicitud de información de inscripción de nacimiento para: ${numeroIdentidad}`
+      );
+      console.log(
+        `📋 Credenciales recibidas: institucion=${codigoInstitucion}, usuario=${usuarioInstitucion}, seguridad=${String(
+          codigoSeguridad
+        ).replace(/.(?=.{4}$)/g, "*")}`
+      );
+
+      // Validar que se proporcionen todas las credenciales necesarias
+      if (
+        !numeroIdentidad ||
+        !codigoInstitucion ||
+        !codigoSeguridad ||
+        !usuarioInstitucion
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: "MISSING_PARAMETERS",
+          message:
+            "Se requieren todos los parámetros: numeroIdentidad, codigoInstitucion, codigoSeguridad, usuarioInstitucion",
+        });
+      }
+
+      // Verificar si las credenciales proporcionadas son las oficiales de prueba
+      const isUsingOfficialTestCredentials =
+        codigoInstitucion === "PRUEBAS" &&
+        codigoSeguridad === "T3$T1NG" &&
+        usuarioInstitucion === "Usuario13";
+
+      // Validar formato del número de identidad (13 dígitos para Honduras)
+      if (!/^\d{13}$/.test(numeroIdentidad)) {
+        console.log("❌ Formato de identidad inválido:", numeroIdentidad);
+        return res.status(400).json({
+          success: false,
+          error: "INVALID_ID_FORMAT",
+          message: "El número de identidad debe tener exactamente 13 dígitos",
+        });
+      }
+
+      // Crear servicio RNP con credenciales proporcionadas por el usuario
+      let rnpService;
+      try {
+        const TEST_URL =
+          process.env.RNP_BASE_URL_TEST || "https://wstest.rnp.hn:1893";
+        const PROD_URL =
+          process.env.RNP_BASE_URL_PROD || "https://soapservices.rnp.hn";
+        let baseUrl = PROD_URL;
+        let chosenEnv: "prod" | "test" = "prod";
+        if (environment === "test") {
+          baseUrl = TEST_URL;
+          chosenEnv = "test";
+        } else if (environment === "prod") {
+          baseUrl = PROD_URL;
+          chosenEnv = "prod";
+        } else if (
+          codigoInstitucion === "PRUEBAS" &&
+          codigoSeguridad === "T3$T1NG" &&
+          usuarioInstitucion === "Usuario13"
+        ) {
+          baseUrl = TEST_URL;
+          chosenEnv = "test";
+        }
+        console.log(`📡 Base URL RNP usada: ${baseUrl} (env=${chosenEnv})`);
+        rnpService = createRNPService({
+          baseUrl,
           codigoInstitucion,
           codigoSeguridad,
           usuarioInstitucion,
@@ -888,8 +1351,31 @@ router.post(
           `❌ Error obteniendo información de inscripción para ${numeroIdentidad}: ${response.error}`
         );
 
-        // Si el error es CSI (credenciales inválidas), usar datos mock automáticamente
+        // Si el error es CSI (credenciales inválidas)
         if (response.error === "CSI") {
+          // Si el cliente pidió resultados reales (preferReal=true) o son credenciales reales (no PRUEBAS),
+          // NO hacer fallback a mock. Devolver el error original.
+          if (
+            preferReal === true ||
+            !(
+              codigoInstitucion === "PRUEBAS" &&
+              codigoSeguridad === "T3$T1NG" &&
+              usuarioInstitucion === "Usuario13"
+            )
+          ) {
+            return res.status(401).json({
+              success: false,
+              error: "CSI",
+              message:
+                "Credenciales RNP no autorizadas o red no habilitada (CSI)",
+              detalles: {
+                endpoint: "Qry_InscripcionNacimiento",
+                parametrosUsados: { numeroIdentidad },
+              },
+              timestamp: new Date().toISOString(),
+            });
+          }
+
           console.log(
             "🔄 Credenciales RNP inválidas - cambiando a datos mock automáticamente"
           );

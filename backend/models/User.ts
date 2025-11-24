@@ -120,7 +120,9 @@ const userSchema = new Schema<IUser>(
 );
 
 // Índices
-userSchema.index({ email: 1 });
+// Nota: no definimos un índice adicional para email porque el atributo `unique: true`
+// en el campo `email` ya crea un índice único. Definir otro índice con el mismo
+// patrón de claves causaba advertencias de índice duplicado.
 userSchema.index({ role: 1 });
 userSchema.index({ isActive: 1 });
 

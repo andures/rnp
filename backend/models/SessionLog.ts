@@ -139,7 +139,6 @@ const SessionLogSchema = new mongoose.Schema(
 
 // Índices para optimizar consultas
 SessionLogSchema.index({ userId: 1, loginTime: -1 });
-SessionLogSchema.index({ sessionId: 1 });
 SessionLogSchema.index({ loginTime: -1 });
 SessionLogSchema.index({ isActive: 1 });
 

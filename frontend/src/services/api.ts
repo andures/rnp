@@ -471,6 +471,62 @@ export interface InscripcionNacimientoResponse {
   };
 }
 
+export interface InfComplementariaInscripcionRequest {
+  numeroIdentidad: string;
+  codigoInstitucion: string;
+  codigoSeguridad: string;
+  usuarioInstitucion: string;
+}
+
+export interface InfComplementariaInscripcionResponse {
+  numeroIdentidad: string;
+  numInscripcion: string;
+  nombres: string;
+  primerApellido: string;
+  segundoApellido: string;
+  sexo: string;
+  fechaDeNacimiento: string;
+  estadoCivil: number;
+  descrEstadoCivil: string;
+  estadoVivencia: number;
+  descrEstadoVivencia: string;
+  fechaDeDefuncion: string;
+  paisNacimiento?: number;
+  descrPaisNacimiento?: string;
+  deptoNacimiento?: number;
+  descrDeptoNacimiento?: string;
+  municNacimiento?: number;
+  descrMunicNacimiento?: string;
+  barrioNacimiento?: number;
+  descrBarrioNacimiento?: string;
+  paisResidencia: number;
+  descrPaisResidencia: string;
+  deptoResidencia: number;
+  descrDeptoResidencia: string;
+  municResidencia: number;
+  descrMunicResidencia: string;
+  barrioResidencia: number;
+  descrBarrioResidencia: string;
+  direccionResidencia: string;
+  ocupacionLaboral: number;
+  descrOcupacionLaboral: string;
+  numeroTelefono: string;
+  telefonoCelular: string;
+  correoElectronico: string;
+  madre?: PersonaCompleta;
+  padre?: PersonaCompleta;
+  foto?: string;
+  timestamp: string;
+  consulta: string;
+  parametrosUsados: Record<string, string>;
+  esMock?: boolean;
+  motivoMock?: string;
+  errorRNPOriginal?: {
+    codigo: string;
+    mensaje: string;
+  };
+}
+
 export const rnpAPI = {
   // Obtener certificado de nacimiento con credenciales dinámicas
   getCertificadoNacimiento: async (
@@ -532,6 +588,23 @@ export const rnpAPI = {
     );
     const response = await apiClient.post(
       `/rnp/inscripcion-nacimiento`,
+      request
+    );
+    return response.data;
+  },
+
+  // Obtener información complementaria de inscripción con credenciales dinámicas
+  getInfComplementariaInscripcion: async (
+    request: InfComplementariaInscripcionRequest
+  ): Promise<ApiResponse<InfComplementariaInscripcionResponse>> => {
+    console.log(
+      `📋 Solicitando información complementaria de inscripción para: ${request.numeroIdentidad}`
+    );
+    console.log(
+      `📋 Credenciales: ${request.codigoInstitucion}/${request.usuarioInstitucion}`
+    );
+    const response = await apiClient.post(
+      `/rnp/inf-complementaria-inscripcion`,
       request
     );
     return response.data;
