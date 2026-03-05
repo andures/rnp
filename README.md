@@ -39,6 +39,7 @@ Administrators can manage users, monitor live session activity, and inspect per-
 ## Features
 
 ### Authentication & Authorization
+
 - JWT-based authentication stored in **HTTP-only cookies** (XSS-safe)
 - Role-based access control with `admin` and `user` roles
 - Automatic **account lockout** after repeated failed login attempts
@@ -46,11 +47,13 @@ Administrators can manage users, monitor live session activity, and inspect per-
 - Token refresh flow with silent re-authentication
 
 ### Admin Dashboard
+
 - Full **user management** — create, activate/deactivate, and manage accounts
 - Real-time **session log viewer** with activity type filters
 - Per-user **activity logs** with query history and timestamps
 
 ### RNP API Integration
+
 - **Certificado de Nacimiento** — Retrieve birth certificate (base64 encoded, downloadable)
 - **Árbol Genealógico** — Multi-generation family tree with kinship labels
 - **Información Completa de Inscripción** — Full registration record including parents' data
@@ -58,6 +61,7 @@ Administrators can manage users, monitor live session activity, and inspect per-
 - Downloadable `.docx` document generation from query results
 
 ### Security
+
 - `Helmet` — HTTP security headers
 - `express-rate-limit` — Tiered rate limiting (general, login, external API)
 - `express-mongo-sanitize` — NoSQL injection prevention
@@ -70,19 +74,19 @@ Administrators can manage users, monitor live session activity, and inspect per-
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Runtime | Node.js 22 |
-| Backend Framework | Express 5 + TypeScript |
-| Database | MongoDB 8 via Mongoose 8 |
-| Authentication | JSON Web Tokens + bcryptjs |
-| Frontend Framework | React 19 + TypeScript |
-| Build Tool | Vite 6 |
-| UI Library | Material UI v7 |
-| HTTP Client | Axios |
-| External API | RNP SOAP/XML (Honduras) |
-| Document Generation | docx |
-| Process Manager | nodemon + ts-node |
+| Layer               | Technology                 |
+| ------------------- | -------------------------- |
+| Runtime             | Node.js 22                 |
+| Backend Framework   | Express 5 + TypeScript     |
+| Database            | MongoDB 8 via Mongoose 8   |
+| Authentication      | JSON Web Tokens + bcryptjs |
+| Frontend Framework  | React 19 + TypeScript      |
+| Build Tool          | Vite 6                     |
+| UI Library          | Material UI v7             |
+| HTTP Client         | Axios                      |
+| External API        | RNP SOAP/XML (Honduras)    |
+| Document Generation | docx                       |
+| Process Manager     | nodemon + ts-node          |
 
 ---
 
@@ -109,6 +113,7 @@ rnp/
 ```
 
 **Request flow:**
+
 ```
 Client → CORS / Helmet / Rate Limiter → JWT Auth Middleware
        → Input Validation & Sanitization → Controller
@@ -169,16 +174,16 @@ Copy `.env.example` to `.env` and fill in the values:
 cp .env.example .env
 ```
 
-| Variable | Description |
-|---|---|
-| `MONGO_URI` | MongoDB connection string |
-| `JWT_SECRET` | Secret key for signing JWT tokens |
-| `JWT_REFRESH_SECRET` | Secret key for refresh tokens |
-| `PORT` | Backend port (default: `3001`) |
-| `NODE_ENV` | `development` or `production` |
-| `ADMIN_EMAIL` | Email for the auto-initialized admin account |
-| `ADMIN_PASSWORD` | Initial password for the admin account |
-| `CLIENT_URL` | Frontend origin URL for CORS |
+| Variable             | Description                                  |
+| -------------------- | -------------------------------------------- |
+| `MONGO_URI`          | MongoDB connection string                    |
+| `JWT_SECRET`         | Secret key for signing JWT tokens            |
+| `JWT_REFRESH_SECRET` | Secret key for refresh tokens                |
+| `PORT`               | Backend port (default: `3001`)               |
+| `NODE_ENV`           | `development` or `production`                |
+| `ADMIN_EMAIL`        | Email for the auto-initialized admin account |
+| `ADMIN_PASSWORD`     | Initial password for the admin account       |
+| `CLIENT_URL`         | Frontend origin URL for CORS                 |
 
 ---
 
@@ -188,32 +193,32 @@ All endpoints are prefixed with `/api`.
 
 ### Auth — `/api/auth`
 
-| Method | Endpoint | Access | Description |
-|---|---|---|---|
-| `POST` | `/login` | Public | Authenticate and receive JWT cookie |
-| `POST` | `/register` | Admin | Create a new user account |
-| `POST` | `/refresh` | Public | Refresh access token |
-| `POST` | `/logout` | Private | Invalidate session |
-| `GET` | `/profile` | Private | Get current user profile |
+| Method | Endpoint    | Access  | Description                         |
+| ------ | ----------- | ------- | ----------------------------------- |
+| `POST` | `/login`    | Public  | Authenticate and receive JWT cookie |
+| `POST` | `/register` | Admin   | Create a new user account           |
+| `POST` | `/refresh`  | Public  | Refresh access token                |
+| `POST` | `/logout`   | Private | Invalidate session                  |
+| `GET`  | `/profile`  | Private | Get current user profile            |
 
 ### RNP — `/api/rnp`
 
-| Method | Endpoint | Access | Description |
-|---|---|---|---|
-| `POST` | `/certificado-nacimiento` | Private | Fetch birth certificate |
-| `POST` | `/arbol-genealogico` | Private | Fetch genealogical tree |
-| `POST` | `/inscripcion-nacimiento` | Private | Fetch birth registration |
-| `POST` | `/informacion-completa` | Private | Fetch full inscription record |
+| Method | Endpoint                  | Access  | Description                   |
+| ------ | ------------------------- | ------- | ----------------------------- |
+| `POST` | `/certificado-nacimiento` | Private | Fetch birth certificate       |
+| `POST` | `/arbol-genealogico`      | Private | Fetch genealogical tree       |
+| `POST` | `/inscripcion-nacimiento` | Private | Fetch birth registration      |
+| `POST` | `/informacion-completa`   | Private | Fetch full inscription record |
 
 ### Admin — `/api/admin`
 
-| Method | Endpoint | Access | Description |
-|---|---|---|---|
-| `GET` | `/users` | Admin | List all users |
-| `PATCH` | `/users/:id` | Admin | Update user status/role |
-| `DELETE` | `/users/:id` | Admin | Delete user |
-| `GET` | `/session-logs` | Admin | View all session logs |
-| `GET` | `/session-logs/:userId` | Admin | View logs for a specific user |
+| Method   | Endpoint                | Access | Description                   |
+| -------- | ----------------------- | ------ | ----------------------------- |
+| `GET`    | `/users`                | Admin  | List all users                |
+| `PATCH`  | `/users/:id`            | Admin  | Update user status/role       |
+| `DELETE` | `/users/:id`            | Admin  | Delete user                   |
+| `GET`    | `/session-logs`         | Admin  | View all session logs         |
+| `GET`    | `/session-logs/:userId` | Admin  | View logs for a specific user |
 
 ---
 
