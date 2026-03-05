@@ -53,6 +53,11 @@ $RECYCLE.BIN/
 .env.*
 !.env.example
 
+# Internal project docs (not for public repo)
+*.md
+!README.md
+!**/README.md
+
 # Optional local config overrides
 *.local.*
 

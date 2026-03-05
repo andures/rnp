@@ -92,6 +92,17 @@ interface ExtendedApiResponse {
 const ApiConsole: React.FC = () => {
   const { user } = useAuth();
   const theme = useTheme();
+  // Mapeo de nombres técnicos a nombres amigables para mostrar en UI
+  const friendlyNameMap: Record<string, string> = {
+    qry_CertificadoNacimiento: "Certificado de nacimiento",
+    lst_ArbolGenealogico: "Árbol genealógico",
+    Qry_InfCompletaInscripcion: "Información completa de inscripción",
+    Qry_InfComplementariaInscripcion:
+      "Información complementaria de inscripción",
+    Qry_InscripcionNacimiento: "Inscripción de nacimiento",
+  };
+
+  const getFriendlyName = (name: string) => friendlyNameMap[name] || name;
   const [selectedEndpoint, setSelectedEndpoint] = useState<ApiEndpoint | null>(
     null
   );
@@ -2025,17 +2036,8 @@ const ApiConsole: React.FC = () => {
   const handleEndpointSelect = (endpoint: ApiEndpoint) => {
     setSelectedEndpoint(endpoint);
 
-    // Pre-llenar con datos oficiales de prueba para todas las APIs del RNP
-    if (endpoint.parameters.includes("codigoInstitucion")) {
-      setQueryParams({
-        numeroIdentidad: "0801201316090", // Número usado en tu ejemplo real
-        codigoInstitucion: "PRUEBAS",
-        codigoSeguridad: "T3$T1NG",
-        usuarioInstitucion: "Usuario13",
-      });
-    } else {
-      setQueryParams({});
-    }
+    // No prellenar parámetros: dejar los campos vacíos
+    setQueryParams({});
   };
 
   const isFormValid =
@@ -2053,7 +2055,7 @@ const ApiConsole: React.FC = () => {
       <Box sx={{ flex: { xs: 1, lg: "0 0 350px" } }}>
         <Paper sx={{ p: 3, height: "fit-content" }}>
           <Typography variant="h6" gutterBottom sx={{ fontWeight: "bold" }}>
-            APIs Disponibles
+            Consultas Disponibles
           </Typography>
 
           <Box sx={{ maxHeight: 400, overflow: "auto" }}>
@@ -2089,7 +2091,7 @@ const ApiConsole: React.FC = () => {
                           variant="body2"
                           sx={{ fontWeight: "medium" }}
                         >
-                          {endpoint.name}
+                          {getFriendlyName(endpoint.name)}
                         </Typography>
                       }
                       secondary={
@@ -2109,20 +2111,7 @@ const ApiConsole: React.FC = () => {
 
       {/* Query Console */}
       <Box sx={{ flex: 1 }}>
-        {/* Banner informativo sobre modo demo */}
-        <Card sx={{ mb: 3, bgcolor: "info.light", color: "info.contrastText" }}>
-          <CardContent sx={{ py: 2 }}>
-            <Box sx={{ display: "flex", alignItems: "center" }}>
-              <Typography variant="body2" sx={{ fontWeight: "bold", mr: 1 }}>
-                ℹ️ Modo Demostración:
-              </Typography>
-              <Typography variant="body2">
-                Las consultas utilizan datos mock ya que requieren acceso desde
-                red autorizada del RNP
-              </Typography>
-            </Box>
-          </CardContent>
-        </Card>
+        {/* Banner de demostración removido */}
 
         <Paper sx={{ p: 3, mb: 3 }}>
           <Box
@@ -2166,7 +2155,7 @@ const ApiConsole: React.FC = () => {
               >
                 <CardContent>
                   <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
-                    {selectedEndpoint.name}
+                    {getFriendlyName(selectedEndpoint.name)}
                   </Typography>
                   <Typography
                     variant="body2"
@@ -2175,29 +2164,6 @@ const ApiConsole: React.FC = () => {
                   >
                     {selectedEndpoint.description}
                   </Typography>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 1,
-                      mt: 2,
-                    }}
-                  >
-                    <Chip
-                      label={selectedEndpoint.method}
-                      color={
-                        selectedEndpoint.method === "GET"
-                          ? "success"
-                          : selectedEndpoint.method === "POST"
-                          ? "primary"
-                          : "secondary"
-                      }
-                      size="small"
-                    />
-                    <Typography variant="caption" color="text.secondary">
-                      {selectedEndpoint.endpoint}
-                    </Typography>
-                  </Box>
                 </CardContent>
               </Card>
 
@@ -2357,7 +2323,7 @@ const ApiConsole: React.FC = () => {
             </Box>
           ) : (
             <List>
-              {results.slice(0, 10).map((result, index) => (
+              {results.slice(0, 1).map((result) => (
                 <React.Fragment key={result.id}>
                   <ListItemButton
                     onClick={() => handleViewResult(result)}
@@ -2410,7 +2376,6 @@ const ApiConsole: React.FC = () => {
                       size="small"
                     />
                   </ListItemButton>
-                  {index < Math.min(results.length, 10) - 1 && <Divider />}
                 </React.Fragment>
               ))}
             </List>

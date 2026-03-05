@@ -38,7 +38,8 @@ const UserDashboard: React.FC = () => {
         </Box>
         <Typography variant="body1" color="text.secondary">
           Bienvenido al sistema de consultas. Aquí puedes realizar consultas a
-          las APIs disponibles y visualizar los resultados de forma organizada.
+          los servicios disponibles y visualizar los resultados de forma
+          organizada.
         </Typography>
       </Paper>
 
